@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Cellid</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh;
+      background: radial-gradient(ellipse at center, #1a1410 0%, #0a0808 100%);
+      color: #f4e4bc;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      cursor: pointer; user-select: none;
+      padding: 2em;
+    }
+    h1 {
+      font-weight: 200; letter-spacing: 0.5em; font-size: 0.85em;
+      color: #8a7a6a; margin: 0 0 3em;
+    }
+    .status {
+      position: fixed; top: 24px; right: 24px;
+      font-size: 0.7em; letter-spacing: 0.15em; text-transform: uppercase;
+      color: #6a8a6a;
+    }
+    .status.off { color: #8a6a6a; }
+    .status::before { content: "● "; }
+    .stage {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 4em;
+      align-items: center;
+      margin-bottom: 3em;
+    }
+    .col { display: flex; flex-direction: column; align-items: center; gap: 0.4em; }
+    .label {
+      font-size: 0.6em; letter-spacing: 0.3em; text-transform: uppercase;
+      color: #6a5a4a;
+    }
+    .value {
+      font-size: 2.4em; font-weight: 200;
+      font-variant-numeric: tabular-nums;
+      color: #d4a373;
+      min-height: 1.1em;
+    }
+    .bow {
+      font-size: 4em; line-height: 1; transition: opacity 0.1s;
+      color: #d4a373;
+    }
+    .note {
+      font-size: 3.6em; font-weight: 200;
+      font-variant-numeric: tabular-nums;
+      color: #f4e4bc;
+      min-height: 1.1em;
+      letter-spacing: 0.05em;
+    }
+    .meter {
+      width: min(560px, 80vw); height: 4px;
+      background: rgba(244, 228, 188, 0.06); border-radius: 2px; overflow: hidden;
+      margin: 0.5em 0 0;
+    }
+    .fill {
+      height: 100%;
+      background: linear-gradient(90deg, #8a5a3a, #d4a373, #f4e4bc);
+      transform-origin: left;
+      transform: scaleX(0);
+      transition: transform 0.06s linear;
+    }
+    .keymap {
+      display: flex; flex-direction: column; gap: 4px;
+      margin-top: 2em;
+      font-variant-numeric: tabular-nums;
+    }
+    .row { display: flex; gap: 4px; justify-content: center; }
+    .row.row1 { padding-left: 1.4em; }
+    .key {
+      width: 2.4em; height: 2.4em;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      border: 1px solid rgba(244, 228, 188, 0.12);
+      border-radius: 6px;
+      font-size: 0.75em;
+      color: #6a5a4a;
+      background: rgba(244, 228, 188, 0.02);
+      transition: background 0.05s, color 0.05s, border-color 0.05s;
+    }
+    .key.sharp { color: #4a4036; }
+    .key.active {
+      background: #d4a373;
+      color: #1a1410;
+      border-color: #d4a373;
+    }
+    .key .pitch { font-size: 0.65em; opacity: 0.5; margin-top: 1px; }
+    .badge {
+      font-size: 0.7em; letter-spacing: 0.3em; text-transform: uppercase;
+      color: #6a5a4a; min-height: 1.2em; margin-top: 0.4em;
+      opacity: 0; transition: opacity 0.1s, color 0.1s;
+    }
+    .badge.on { opacity: 1; color: #d4a373; }
+    .hint {
+      color: #4a4036; font-size: 0.75em; margin-top: 3em;
+      letter-spacing: 0.1em;
+      text-align: center;
+      line-height: 1.8;
+    }
+    .hint.armed { color: #6a8a6a; }
+    .hint kbd {
+      font-family: inherit;
+      padding: 1px 6px;
+      border: 1px solid #4a4036;
+      border-radius: 3px;
+      color: #8a7a6a;
+      font-size: 0.85em;
+    }
+  </style>
+</head>
+<body>
+  <div class="status off" id="status">disconnected</div>
+  <h1>CELLID</h1>
+
+  <div class="stage">
+    <div class="col">
+      <div class="label">Bow</div>
+      <div class="bow" id="bow" style="opacity:0.15">—</div>
+    </div>
+    <div class="col">
+      <div class="label">Note</div>
+      <div class="note" id="note">—</div>
+      <div class="badge" id="modBadge"></div>
+    </div>
+    <div class="col">
+      <div class="label">Octave</div>
+      <div class="value" id="octave">3</div>
+    </div>
+  </div>
+
+  <div class="meter"><div class="fill" id="fill"></div></div>
+
+  <div class="keymap" id="keymap"></div>
+
+  <p class="hint" id="hint">
+    Click anywhere to start audio<br>
+    <kbd>A S D F G H J K L ; ' ↵</kbd> = white keys &nbsp;·&nbsp;
+    <kbd>W E T Y U O P</kbd> = sharps<br>
+    <kbd>[</kbd> / <kbd>]</kbd> = octave down/up &nbsp;·&nbsp;
+    <kbd>Tab</kbd> = sustain<br>
+    hold <kbd>Z</kbd> maj &nbsp;·&nbsp;
+    <kbd>X</kbd> min &nbsp;·&nbsp;
+    <kbd>C</kbd> maj7 &nbsp;·&nbsp;
+    <kbd>V</kbd> m7 &nbsp;·&nbsp;
+    <kbd>B</kbd> dom7<br>
+    move the lid to bow
+  </p>
+
+  <script>
+    // ── Logic Pro Musical Typing layout ────────────────────────────
+    // Top row (sharps):     W   E       T   Y   U       O   P
+    // Bottom row (whites):  A S D F G H J K L ;
+    const KEYMAP = {
+      'a': 0,  'w': 1,  's': 2,  'e': 3,  'd': 4,
+      'f': 5,  't': 6,  'g': 7,  'y': 8,  'h': 9,
+      'u': 10, 'j': 11, 'k': 12, 'o': 13, 'l': 14,
+      'p': 15, ';': 16, "'": 17, 'enter': 19,
+    };
+    const NOTE_NAMES = ['C','C#','D','D#','E','F','F#','G','G#','A','A#','B'];
+    const noteName = (semitone, octave) => {
+      const o = octave + Math.floor(semitone / 12);
+      return NOTE_NAMES[((semitone % 12) + 12) % 12] + o;
+    };
+    const midi = (semitone, octave) => 12 * (octave + 1) + semitone;
+    const freqOf = (m) => 440 * Math.pow(2, (m - 69) / 12);
+
+    // Bow / lid mapping
+    const MIN_ANGLE = 60;
+    const MAX_ANGLE = 130;
+    const STILL_GAIN = 0.22;  // baseline gain when lid is still (soft drone)
+    const FULL_OMEGA = 60;    // °/s — saturates bow gain on top of baseline
+    const DIR_OMEGA  = 6;     // °/s — bow direction indicator threshold
+
+    // Chord modifiers — hold Z/X/C/V/B
+    const CHORDS = {
+      maj:  [0, 4, 7],
+      min:  [0, 3, 7],
+      maj7: [0, 4, 7, 11],
+      m7:   [0, 3, 7, 10],
+      dom7: [0, 4, 7, 10],
+    };
+    const MOD_MAP = { z: 'maj', x: 'min', c: 'maj7', v: 'm7', b: 'dom7' };
+    let chordMod = null;
+    const modKeysHeld = [];   // ordered, last entry = active mod
+
+    let baseOctave = 3;       // 'A' key → C{baseOctave}
+    let sustainHeld = false;
+    let bowGain = 0;          // smoothed 0..1
+    let bowDir = 0;           // -1 down, +1 up, 0 idle
+    let lidAngle = 95;        // smoothed
+    let prevAngle = null, prevT = null;
+    let omega = 0;            // °/s, smoothed
+
+    // ── Audio ───────────────────────────────────────────────────────
+    let audioCtx = null;
+    let masterGain = null;    // bow envelope output
+    let lpFilter = null;
+    let activeVoices = new Map();   // key char → voice[]
+    let sustained = new Set();      // key chars held in sustain pool
+
+    const startAudio = () => {
+      if (audioCtx) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        return;
+      }
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = audioCtx.createGain();
+      masterGain.gain.value = 0;
+      lpFilter = audioCtx.createBiquadFilter();
+      lpFilter.type = 'lowpass';
+      lpFilter.frequency.value = 1500;
+      lpFilter.Q.value = 0.6;
+      const compressor = audioCtx.createDynamicsCompressor();
+      compressor.threshold.value = -12;
+      compressor.ratio.value = 4;
+      masterGain.connect(lpFilter).connect(compressor).connect(audioCtx.destination);
+      const hint = document.getElementById('hint');
+      hint.classList.add('armed');
+      hint.firstChild.textContent = 'Audio ready — bow with the lid';
+    };
+    document.body.addEventListener('click', startAudio);
+
+    const makeVoice = (freq) => {
+      // Two detuned saws + sub-octave triangle for body, vibrato on detune.
+      const out = audioCtx.createGain();
+      out.gain.value = 0.0001;
+      const osc1 = audioCtx.createOscillator(); osc1.type = 'sawtooth'; osc1.frequency.value = freq; osc1.detune.value = -7;
+      const osc2 = audioCtx.createOscillator(); osc2.type = 'sawtooth'; osc2.frequency.value = freq; osc2.detune.value = +7;
+      const osc3 = audioCtx.createOscillator(); osc3.type = 'triangle'; osc3.frequency.value = freq / 2;
+      const sub  = audioCtx.createGain(); sub.gain.value = 0.18;
+      osc3.connect(sub).connect(out);
+      const mix = audioCtx.createGain(); mix.gain.value = 0.32;
+      osc1.connect(mix); osc2.connect(mix); mix.connect(out);
+
+      // vibrato
+      const lfo = audioCtx.createOscillator(); lfo.type = 'sine'; lfo.frequency.value = 5.2;
+      const lfoGain = audioCtx.createGain(); lfoGain.gain.value = 6;  // cents
+      lfo.connect(lfoGain);
+      lfoGain.connect(osc1.detune); lfoGain.connect(osc2.detune);
+
+      out.connect(masterGain);
+      const t0 = audioCtx.currentTime;
+      osc1.start(t0); osc2.start(t0); osc3.start(t0); lfo.start(t0);
+      // soft attack into sustain (real volume comes from masterGain via bow)
+      out.gain.setTargetAtTime(0.55, t0, 0.04);
+      return { out, osc1, osc2, osc3, lfo };
+    };
+
+    const releaseVoices = (vs) => {
+      if (!vs || !audioCtx) return;
+      for (const v of vs) {
+        const t = audioCtx.currentTime;
+        v.out.gain.cancelScheduledValues(t);
+        v.out.gain.setTargetAtTime(0.0001, t, 0.18);
+        const stopAt = t + 0.6;
+        v.osc1.stop(stopAt); v.osc2.stop(stopAt); v.osc3.stop(stopAt); v.lfo.stop(stopAt);
+      }
+    };
+
+    const noteOn = (k) => {
+      if (!(k in KEYMAP)) return;
+      startAudio();
+      if (activeVoices.has(k)) return;
+      const semi = KEYMAP[k];
+      const intervals = chordMod ? CHORDS[chordMod] : [0];
+      const m0 = midi(semi, baseOctave);
+      const voices = intervals.map(iv => makeVoice(freqOf(m0 + iv)));
+      activeVoices.set(k, voices);
+      sustained.delete(k);
+      paintKey(k, true);
+      const suffix = chordMod ? ` ${chordMod}` : '';
+      currentNoteLabel = noteName(semi, baseOctave) + suffix;
+      document.getElementById('note').textContent = currentNoteLabel;
+    };
+
+    const noteOff = (k) => {
+      if (!(k in KEYMAP)) return;
+      if (sustainHeld) {
+        sustained.add(k);
+        paintKey(k, true);
+        return;
+      }
+      const vs = activeVoices.get(k);
+      if (vs) {
+        releaseVoices(vs);
+        activeVoices.delete(k);
+      }
+      paintKey(k, false);
+      if (activeVoices.size === 0) {
+        refreshIdleLabel();
+      }
+    };
+
+    const refreshIdleLabel = () => {
+      if (activeVoices.size > 0) return;
+      document.getElementById('note').textContent = chordMod || '—';
+    };
+
+    let currentNoteLabel = '—';
+
+    // ── Keyboard handling ──────────────────────────────────────────
+    document.addEventListener('keydown', (ev) => {
+      if (ev.repeat) return;
+      const k = ev.key.toLowerCase();
+      if (k === '[') { baseOctave = Math.max(0, baseOctave - 1); document.getElementById('octave').textContent = baseOctave; ev.preventDefault(); return; }
+      if (k === ']') { baseOctave = Math.min(7, baseOctave + 1); document.getElementById('octave').textContent = baseOctave; ev.preventDefault(); return; }
+      if (k in MOD_MAP) {
+        if (!modKeysHeld.includes(k)) modKeysHeld.push(k);
+        chordMod = MOD_MAP[modKeysHeld[modKeysHeld.length - 1]];
+        paintMod(); refreshIdleLabel();
+        ev.preventDefault();
+        return;
+      }
+      if (ev.key === 'Tab') {
+        sustainHeld = true;
+        ev.preventDefault();
+        return;
+      }
+      if (k in KEYMAP) {
+        noteOn(k);
+        ev.preventDefault();
+      }
+    });
+    document.addEventListener('keyup', (ev) => {
+      const k = ev.key.toLowerCase();
+      if (ev.key === 'Tab') {
+        sustainHeld = false;
+        for (const sk of sustained) {
+          const vs = activeVoices.get(sk);
+          if (vs) { releaseVoices(vs); activeVoices.delete(sk); }
+          paintKey(sk, false);
+        }
+        sustained.clear();
+        if (activeVoices.size === 0) refreshIdleLabel();
+        ev.preventDefault();
+        return;
+      }
+      if (k in MOD_MAP) {
+        const idx = modKeysHeld.indexOf(k);
+        if (idx >= 0) modKeysHeld.splice(idx, 1);
+        const last = modKeysHeld[modKeysHeld.length - 1];
+        chordMod = last ? MOD_MAP[last] : null;
+        paintMod(); refreshIdleLabel();
+        ev.preventDefault();
+        return;
+      }
+      if (k in KEYMAP) {
+        noteOff(k);
+        ev.preventDefault();
+      }
+    });
+
+    const paintMod = () => {
+      const badge = document.getElementById('modBadge');
+      if (!badge) return;
+      badge.textContent = chordMod || '';
+      badge.classList.toggle('on', !!chordMod);
+    };
+
+    // ── Keymap UI ──────────────────────────────────────────────────
+    const KEY_ORDER_TOP = [['w','C#'], ['e','D#'], null, ['t','F#'], ['y','G#'], ['u','A#'], null, ['o','C#'], ['p','D#']];
+    const KEY_ORDER_BOT = [['a','C'], ['s','D'], ['d','E'], ['f','F'], ['g','G'], ['h','A'], ['j','B'], ['k','C'], ['l','D'], [';','E'], ["'",'F'], ['enter','G','↵']];
+    const keyEls = {};
+    const buildKeymap = () => {
+      const wrap = document.getElementById('keymap');
+      const r1 = document.createElement('div'); r1.className = 'row row1';
+      for (const item of KEY_ORDER_TOP) {
+        const el = document.createElement('div');
+        if (!item) { el.className = 'key'; el.style.opacity = 0; }
+        else {
+          el.className = 'key sharp';
+          el.innerHTML = `${item[0].toUpperCase()}<span class="pitch">${item[1]}</span>`;
+          keyEls[item[0]] = el;
+        }
+        r1.appendChild(el);
+      }
+      const r2 = document.createElement('div'); r2.className = 'row row2';
+      for (const item of KEY_ORDER_BOT) {
+        const k = item[0], p = item[1];
+        const display = item[2] || k.toUpperCase();
+        const el = document.createElement('div');
+        el.className = 'key';
+        el.innerHTML = `${display}<span class="pitch">${p}</span>`;
+        keyEls[k] = el;
+        r2.appendChild(el);
+      }
+      wrap.appendChild(r1); wrap.appendChild(r2);
+    };
+    const paintKey = (k, on) => {
+      const el = keyEls[k];
+      if (el) el.classList.toggle('active', on);
+    };
+    buildKeymap();
+
+    // ── WebSocket: lid angle stream ────────────────────────────────
+    const setStatus = (text, ok) => {
+      const el = document.getElementById('status');
+      el.textContent = text;
+      el.classList.toggle('off', !ok);
+    };
+    const connectWS = () => {
+      const ws = new WebSocket('ws://localhost:8765');
+      ws.onopen = () => setStatus('connected', true);
+      ws.onerror = () => setStatus('error', false);
+      ws.onclose = () => { setStatus('disconnected', false); setTimeout(connectWS, 1500); };
+      ws.onmessage = (e) => {
+        try {
+          const { angle } = JSON.parse(e.data);
+          const now = performance.now() / 1000;
+          if (prevAngle !== null && prevT !== null) {
+            const raw = (angle - prevAngle) / Math.max(1e-3, (now - prevT));
+            omega = omega * 0.6 + raw * 0.4;
+          }
+          prevAngle = angle; prevT = now;
+          lidAngle = lidAngle * 0.7 + angle * 0.3;
+        } catch {}
+      };
+    };
+    connectWS();
+
+    // ── Bow engine: omega → masterGain, angle → filter ─────────────
+    setInterval(() => {
+      if (!audioCtx) return;
+      const a = Math.abs(omega);
+      const moveT = Math.min(1, a / FULL_OMEGA);
+      const target = STILL_GAIN + (1 - STILL_GAIN) * moveT;
+      bowGain = bowGain * 0.55 + target * 0.45;
+      const out = bowGain * 0.32;
+      masterGain.gain.setTargetAtTime(out, audioCtx.currentTime, 0.04);
+
+      // lid absolute angle → tone color (filter cutoff)
+      const t = Math.max(0, Math.min(1, (lidAngle - MIN_ANGLE) / (MAX_ANGLE - MIN_ANGLE)));
+      const cutoff = 380 * Math.pow(5500 / 380, t); // 380Hz → 5500Hz exponential
+      lpFilter.frequency.setTargetAtTime(cutoff, audioCtx.currentTime, 0.05);
+
+      bowDir = a < DIR_OMEGA ? 0 : (omega < 0 ? -1 : 1);
+      const bowEl = document.getElementById('bow');
+      bowEl.textContent = bowDir === -1 ? '▼' : bowDir === 1 ? '▲' : '—';
+      bowEl.style.opacity = bowDir === 0 ? 0.15 : Math.max(0.4, bowGain);
+
+      document.getElementById('fill').style.transform = `scaleX(${bowGain.toFixed(3)})`;
+    }, 30);
+  </script>
+</body>
+</html>
